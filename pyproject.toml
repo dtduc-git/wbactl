@@ -1,0 +1,71 @@
+[project]
+name = "wbactl"
+dynamic = ["version"]
+description = "Static/CI toolkit for Web Bot Auth (IETF draft-00): agent-side doctor for signed agent traffic."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Duke - Duc Dinh", email = "dtduc.contact@gmail.com" }]
+keywords = [
+  "web-bot-auth",
+  "http-message-signatures",
+  "rfc9421",
+  "agents",
+  "bots",
+  "ietf",
+  "conformance",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Internet :: WWW/HTTP",
+  "Topic :: Security",
+]
+dependencies = [
+  "cryptography>=42",
+  "rich>=13.7",
+  "typer>=0.12",
+]
+
+[project.scripts]
+wbactl = "wbactl.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/dtduc-git/wbactl"
+Issues = "https://github.com/dtduc-git/wbactl/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/wbactl/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wbactl"]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.5",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/wbactl/cli.py" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

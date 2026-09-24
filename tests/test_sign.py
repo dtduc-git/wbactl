@@ -1,0 +1,113 @@
+"""Signature base construction and sign/verify roundtrip."""
+
+from wbactl.keys import generate_private_key, jwk_thumbprint, private_from_jwk, public_jwk
+from wbactl.sign import SignatureParams, authority, sign_request, signature_base
+from wbactl.verify import verify_request
+
+# Published RFC 9421 test key from cloudflare/web-bot-auth (public test material).
+CLOUDFLARE_TEST_JWK = {
+    "kty": "OKP",
+    "crv": "Ed25519",
+    "kid": "test-key-ed25519",
+    "d": "n4Ni-HpISpVObnQMW0wOhCKROaIKqKtW_2ZYb2p9KcU",
+    "x": "JrQLj5P_89iXES9-vFgrIy29clF9CC_oPPsw3c5D0bs",
+}
+CLOUDFLARE_AGENT = "https://http-message-signatures-example.research.cloudflare.com"
+CLOUDFLARE_URL = CLOUDFLARE_AGENT + "/"
+
+# Generated with cloudflare/web-bot-auth (web-bot-auth@0.2.0, signSync) on
+# 2026-09-24 — cross-implementation known answer.
+CLOUDFLARE_VECTOR_INPUT = (
+    'sig1=("@authority" "signature-agent");created=1735689600'
+    ';keyid="poqkLGiymh_W0uP6PZFw-dvez3QJT5SolqXBCW38r0U"'
+    ';alg="ed25519";expires=1798761600;tag="web-bot-auth"'
+)
+CLOUDFLARE_VECTOR_SIGNATURE = (
+    "sig1=:Sm5jzYyhJcAxVVzpI4tC+cfdvcJrtwlaky/QEsuHiArg4KSArBmsWxy58pAY"
+    "//54jlA7BdmHX6QxLJ6BYnRmCg==:"
+)
+
+
+def test_cloudflare_reference_vector() -> None:
+    key = private_from_jwk(CLOUDFLARE_TEST_JWK)
+    headers = sign_request(
+        "GET",
+        CLOUDFLARE_URL,
+        {},
+        key,
+        CLOUDFLARE_AGENT,
+        created=1735689600,
+        expires=1798761600,
+    )
+    assert headers["Signature-Input"] == CLOUDFLARE_VECTOR_INPUT
+    assert headers["Signature"] == CLOUDFLARE_VECTOR_SIGNATURE
+
+
+def test_authority_omits_default_port() -> None:
+    assert authority("https://example.com/x") == "example.com"
+    assert authority("https://example.com:443/x") == "example.com"
+    assert authority("http://example.com:80/x") == "example.com"
+    assert authority("https://example.com:8443/x") == "example.com:8443"
+
+
+def test_authority_brackets_ipv6() -> None:
+    assert authority("https://[::1]/x") == "[::1]"
+    assert authority("https://[::1]:8443/x") == "[::1]:8443"
+
+
+def test_authority_idna_encodes_host() -> None:
+    assert authority("https://例え.jp/x") == "例え.jp".encode("idna").decode()
+
+
+def test_signature_base_shape() -> None:
+    params = SignatureParams(
+        covered=("@authority", "signature-agent"),
+        created=1735689600,
+        expires=1735693200,
+        keyid="abc",
+    )
+    base = signature_base(
+        "GET",
+        "https://example.com/path",
+        {"Signature-Agent": '"https://agent.example"'},
+        params.covered,
+        params.serialize(),
+    )
+    assert base == (
+        b'"@authority": example.com\n'
+        b'"signature-agent": "https://agent.example"\n'
+        b'"@signature-params": ("@authority" "signature-agent")'
+        b';created=1735689600;keyid="abc";alg="ed25519"'
+        b';expires=1735693200;tag="web-bot-auth"'
+    )
+
+
+def test_sign_verify_roundtrip() -> None:
+    key = generate_private_key()
+    headers = sign_request("GET", "https://example.com/a", {}, key, "https://agent.example")
+    result = verify_request(
+        "GET",
+        "https://example.com/a",
+        headers,
+        {"keys": [public_jwk(key.public_key())]},
+    )
+    assert result.ok, result.reason
+    assert result.keyid == jwk_thumbprint(public_jwk(key.public_key()))
+    assert result.signature_agent == "https://agent.example"
+
+
+def test_authority_must_be_covered_when_signing() -> None:
+    key = generate_private_key()
+    try:
+        sign_request(
+            "GET",
+            "https://example.com/a",
+            {},
+            key,
+            "https://agent.example",
+            covered=("signature-agent",),
+        )
+    except ValueError as exc:
+        assert "@authority" in str(exc)
+    else:
+        raise AssertionError("expected ValueError")
