@@ -5,9 +5,10 @@ bad-signature requests with a reason code. The ``@signature-params`` line of the
 signature base is taken verbatim from the received ``Signature-Input`` member —
 parsed parameters are never re-serialized.
 
-The Signature-Input parser covers the profile used by Web Bot Auth (inner list of
-sf-strings plus typed parameters) and rejects anything it cannot consume fully.
-Full RFC 8941 (escapes, booleans, structured components) is P1.
+Both Signature-Agent formats are supported: the legacy bare string
+(``"https://agent.example"``) and the structured dictionary
+(``sig1="https://agent.example";type=directory``) with the matching
+``"signature-agent";key="sig1"`` covered component.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from cryptography.exceptions import InvalidSignature
 
 from . import spec
 from .keys import b64_decode, public_from_jwk, try_jwk_thumbprint
-from .sign import signature_base
+from .sign import component_name, parse_component, signature_base, split_top_level
 
 _KEY = r"[a-z*][a-z0-9_.*-]*"
 _ENTRY = re.compile(rf"^(?P<label>{_KEY})=(?P<value>.+)$")
@@ -28,6 +29,11 @@ _INNER = re.compile(r"^\((?P<inner>.*?)\)(?P<rest>.*)$")
 _KEY_RE = re.compile(_KEY)
 _INT_RE = re.compile(r"-?\d{1,15}")
 _SIGNATURE_ENTRY = re.compile(rf"^(?P<label>{_KEY})=:(?P<sig>[A-Za-z0-9+/=]+):$")
+_AGENT_MEMBER = re.compile(
+    rf'(?P<label>{_KEY})="(?P<url>[^"]*)"'
+    r'(?P<params>(?:;\w+=(?:"[^"]*"|[^;,\s]+))*)'
+)
+_AGENT_PARAM = re.compile(r';(\w+)=("[^"]*"|[^;,\s]+)')
 
 
 @dataclass(frozen=True)
@@ -48,33 +54,17 @@ class _Param:
 
 
 @dataclass(frozen=True)
+class _AgentEntry:
+    url: str
+    type: str | None
+
+
+@dataclass(frozen=True)
 class _Entry:
     label: str
     covered: tuple[str, ...]
     params_value: str
     params: dict[str, _Param]
-
-
-def _split_top_level(value: str) -> list[str]:
-    """Split a structured-field list on commas that are not inside quoted strings."""
-    entries: list[str] = []
-    current: list[str] = []
-    in_quote = False
-    escaped = False
-    for char in value:
-        if escaped:
-            escaped = False
-        elif char == "\\" and in_quote:
-            escaped = True
-        elif char == '"':
-            in_quote = not in_quote
-        elif char == "," and not in_quote:
-            entries.append("".join(current).strip())
-            current = []
-            continue
-        current.append(char)
-    entries.append("".join(current).strip())
-    return [entry for entry in entries if entry]
 
 
 def _unquote(value: str) -> str:
@@ -119,29 +109,49 @@ def _parse_params(rest: str) -> dict[str, _Param] | None:
 
 
 def _parse_inner_list(inner: str) -> tuple[str, ...] | None:
-    """Parse ``sf-string *(1*SP sf-string)``; None when anything else is present."""
-    components: list[str] = []
+    """Parse ``sf-string *( ";" parameter )`` identifiers, verbatim; None when malformed."""
+    identifiers: list[str] = []
     position = 0
     while position < len(inner):
         while position < len(inner) and inner[position] == " ":
             position += 1
         if position >= len(inner):
             break
+        start = position
         if inner[position] != '"':
             return None
         end = inner.find('"', position + 1)
         if end == -1:
             return None
-        value = inner[position + 1 : end]
-        if not value or "\\" in value or any(not 0x20 <= ord(char) <= 0x7E for char in value):
+        name = inner[position + 1 : end]
+        if not name or "\\" in name or any(not 0x20 <= ord(char) <= 0x7E for char in name):
             return None
-        components.append(value)
         position = end + 1
+        while position < len(inner) and inner[position] == ";":
+            position += 1
+            name_match = _KEY_RE.match(inner, position)
+            if not name_match:
+                return None
+            position = name_match.end()
+            if position >= len(inner) or inner[position] != "=":
+                return None
+            position += 1
+            if position < len(inner) and inner[position] == '"':
+                param_end = inner.find('"', position + 1)
+                if param_end == -1:
+                    return None
+                position = param_end + 1
+            else:
+                int_match = _INT_RE.match(inner, position)
+                if not int_match:
+                    return None
+                position = int_match.end()
+        identifiers.append(inner[start:position])
         if position < len(inner) and inner[position] != " ":
             return None
-    if not components or len(set(components)) != len(components):
+    if not identifiers or len(set(identifiers)) != len(identifiers):
         return None
-    return tuple(components)
+    return tuple(identifiers)
 
 
 def _parse_entry(entry: str) -> _Entry | None:
@@ -163,11 +173,65 @@ def _parse_entry(entry: str) -> _Entry | None:
 
 def _parse_signatures(value: str) -> dict[str, str]:
     signatures: dict[str, str] = {}
-    for entry in _split_top_level(value):
+    for entry in split_top_level(value):
         match = _SIGNATURE_ENTRY.match(entry)
         if match:
             signatures[match.group("label")] = match.group("sig")
     return signatures
+
+
+def _parse_agent_header(value: str) -> dict[str, _AgentEntry] | None:
+    """Parse a Signature-Agent header: legacy string or structured dictionary.
+
+    Returns a mapping keyed by label; the legacy form is keyed by "".
+    """
+    value = value.strip()
+    if value.startswith('"') and value.endswith('"') and value.count('"') == 2:
+        url = value[1:-1]
+        if not url:
+            return None
+        return {"": _AgentEntry(url, None)}
+    entries: dict[str, _AgentEntry] = {}
+    for item in split_top_level(value):
+        match = _AGENT_MEMBER.fullmatch(item)
+        if match is None or not _KEY_RE.fullmatch(match.group("label")):
+            return None
+        if not match.group("url") or match.group("label") in entries:
+            return None
+        params = {name: _unquote(raw) for name, raw in _AGENT_PARAM.findall(match.group("params"))}
+        agent_type = params.get("type")
+        if agent_type is not None and agent_type not in spec.SIGNATURE_AGENT_TYPES:
+            return None
+        entries[match.group("label")] = _AgentEntry(match.group("url"), agent_type)
+    return entries or None
+
+
+def _resolve_agent(covered: tuple[str, ...], header: str) -> tuple[str | None, str | None]:
+    """Return (agent URL, failure reason) for the covered agent component."""
+    components = [item for item in covered if component_name(item) == "signature-agent"]
+    if len(components) != 1:
+        return None, "signature_agent_not_covered"
+    if not header:
+        return None, "signature_agent_missing"
+    entries = _parse_agent_header(header)
+    if entries is None:
+        return None, "signature_agent_malformed"
+
+    try:
+        _, params = parse_component(components[0])
+    except ValueError:
+        return None, "signature_agent_malformed"
+    if not params:
+        legacy = entries.get("")
+        if legacy is None:
+            return None, "signature_agent_malformed"
+        return legacy.url, None
+    if set(params) != {"key"} or not _KEY_RE.fullmatch(params["key"]):
+        return None, "signature_agent_not_covered"
+    member = entries.get(params["key"])
+    if member is None:
+        return None, "signature_agent_malformed"
+    return member.url, None
 
 
 def verify_request(
@@ -187,7 +251,7 @@ def verify_request(
         return VerifyResult(False, "no_signature")
 
     entries: list[_Entry] = []
-    for raw in _split_top_level(signature_input):
+    for raw in split_top_level(signature_input):
         parsed = _parse_entry(raw)
         if parsed is None:
             return VerifyResult(False, "malformed_signature_input")
@@ -215,13 +279,14 @@ def verify_request(
     except ValueError:
         return VerifyResult(False, "bad_signature_encoding")
 
-    if "@authority" not in entry.covered:
+    if '"@authority"' not in entry.covered:
         return VerifyResult(False, "authority_not_covered")
-    agent = _unquote(lower.get("signature-agent", ""))
-    if not agent:
-        return VerifyResult(False, "signature_agent_missing")
-    if "signature-agent" not in entry.covered:
-        return VerifyResult(False, "signature_agent_not_covered")
+    agent: str | None = None
+    raw_agent = lower.get("signature-agent", "")
+    if raw_agent:
+        agent, agent_failure = _resolve_agent(entry.covered, raw_agent)
+        if agent_failure is not None:
+            return VerifyResult(False, agent_failure)
 
     keyid_param = entry.params.get("keyid")
     if keyid_param is None or not keyid_param.quoted or not keyid_param.value:

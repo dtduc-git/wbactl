@@ -10,7 +10,9 @@ DRAFT_DATE = "2026-09-01"
 TAG = "web-bot-auth"
 ALG = "ed25519"
 WELL_KNOWN_PATH = "/.well-known/http-message-signatures-directory"
-REQUIRED_COMPONENTS = ("@authority", "signature-agent")
+# Serialized component identifiers (RFC 9421 §2.1), quotes included.
+REQUIRED_COMPONENTS = ('"@authority"', '"signature-agent"')
+SIGNATURE_AGENT_TYPES = ("directory", "jwks_uri", "cimd")
 DEFAULT_LIFETIME_SECONDS = 300
 CLOCK_SKEW_SECONDS = 60
 MAX_SIGNATURE_AGE_SECONDS = 24 * 60 * 60

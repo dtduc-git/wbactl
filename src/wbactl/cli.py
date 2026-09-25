@@ -12,6 +12,7 @@ from rich.table import Table
 
 from . import __version__, spec
 from .check import run_check
+from .conformance import run_conformance
 from .keys import (
     generate_private_key,
     jwk_thumbprint,
@@ -19,6 +20,7 @@ from .keys import (
     public_jwk,
     save_private_key,
 )
+from .vectors import VectorError, load_vectors
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -123,6 +125,76 @@ def check(
     if report.verdict in {"inconclusive", "payment_required"}:
         raise typer.Exit(3)
     raise typer.Exit(1)
+
+
+@app.command()
+def conformance(
+    vectors_path: Path | None = typer.Option(
+        None, "--vectors", help="Vector file (default: bundled vectors)."
+    ),
+    target_url: str | None = typer.Option(
+        None, "--target-url", help="Verifier service URL (POST JSON, returns JSON verdict)."
+    ),
+    target_cmd: str | None = typer.Option(
+        None, "--target-cmd", help="Verifier command (JSON on stdin, JSON on stdout)."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Machine-readable output."),
+    strict_reason: bool = typer.Option(
+        False,
+        "--strict-reason",
+        help="Also compare verifier reason codes (use for the bundled reference verifier).",
+    ),
+) -> None:
+    """Run conformance vectors against a Web Bot Auth verifier."""
+    if target_url is not None and target_cmd is not None:
+        console.print("[red]error:[/red] use either --target-url or --target-cmd, not both")
+        raise typer.Exit(1)
+    try:
+        vectors = load_vectors(vectors_path)
+    except VectorError as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    outcomes = run_conformance(
+        vectors, target_url=target_url, target_cmd=target_cmd, strict_reason=strict_reason
+    )
+    passed = sum(1 for outcome in outcomes if outcome.passed)
+    if as_json:
+        console.print_json(
+            json.dumps(
+                {
+                    "total": len(outcomes),
+                    "passed": passed,
+                    "outcomes": [
+                        {
+                            "name": outcome.vector.name,
+                            "expect": outcome.vector.expect,
+                            "accepted": outcome.accepted,
+                            "reason": outcome.reason,
+                            "error": outcome.error,
+                            "passed": outcome.passed,
+                        }
+                        for outcome in outcomes
+                    ],
+                }
+            )
+        )
+    else:
+        table = Table(title=f"wbactl conformance ({passed}/{len(outcomes)} passed)")
+        table.add_column("vector")
+        table.add_column("expect")
+        table.add_column("result")
+        table.add_column("detail")
+        for outcome in outcomes:
+            if outcome.error is not None:
+                result, detail = "ERROR", outcome.error
+            else:
+                result = "PASS" if outcome.passed else "FAIL"
+                detail = f"accepted={outcome.accepted} reason={outcome.reason}"
+            table.add_row(outcome.vector.name, outcome.vector.expect, result, detail)
+        console.print(table)
+    if passed != len(outcomes):
+        raise typer.Exit(1)
 
 
 def main() -> None:

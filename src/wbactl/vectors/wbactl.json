@@ -1,0 +1,260 @@
+{
+  "spec": "draft-ietf-webbotauth-httpsig-protocol-00",
+  "keys": [
+    {
+      "crv": "Ed25519",
+      "kty": "OKP",
+      "x": "tOcmt9iEXl7Ha2sDUI-3FiCVXa-X6Gwnsu67kagVa1g"
+    }
+  ],
+  "vectors": [
+    {
+      "name": "accept-legacy",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:RoGd0jaiRDEuosHhJ/iEO0NDtRiF8lq2K3a+4LKK7dpdXojELg0igGxYdZas6ABX0VYWMdU5x2WjOCadOUiOCg==:"
+      },
+      "now": 1735689660,
+      "expect": "accept",
+      "reason": "ok"
+    },
+    {
+      "name": "accept-structured",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "sig1=\"https://signature-agent.test\";type=directory",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\";key=\"sig1\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:LyPXBahoSn35pFUxUbS77FYJ3tZUkCyMaSWF8sAMdsBueq5NcYhPphG8qUBSxLP9X2XL4u1MPJrgpndyojs6CA==:"
+      },
+      "now": 1735689660,
+      "expect": "accept",
+      "reason": "ok"
+    },
+    {
+      "name": "accept-no-agent",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Input": "sig1=(\"@authority\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:7j10MXODp6vQVWbJrEZfcEVE3fz6AOf9aDD4jOO2vevEylKnXR1fEQzeFkxU4Hl34BU+eoTV7JlYA9ZFDmHsAg==:"
+      },
+      "now": 1735689660,
+      "expect": "accept",
+      "reason": "ok"
+    },
+    {
+      "name": "reject-unsigned",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {},
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "no_signature"
+    },
+    {
+      "name": "reject-bad-signature",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:RAGd0jaiRDEuosHhJ/iEO0NDtRiF8lq2K3a+4LKK7dpdXojELg0igGxYdZas6ABX0VYWMdU5x2WjOCadOUiOCg==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "bad_signature"
+    },
+    {
+      "name": "reject-expired",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=1735693200;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:/WVg1vwATi9irHm/0BpVYgOzeF8glhc8N+LWqqoUs5jNNYud4o20iPosDIPCruf2XURSqip+RCl56zOqoQOHDA==:"
+      },
+      "now": 1735696800,
+      "expect": "reject",
+      "reason": "expired"
+    },
+    {
+      "name": "reject-created-in-future",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735693200;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=1735696800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:bfyX7gEqU0+oOYLhvn+JIzdLM0k/CDiXvJNx3sdo/k3m4c2euGM9AZKjpyT7NKOJctnbJNbB78abdFJKtwWiBQ==:"
+      },
+      "now": 1735689600,
+      "expect": "reject",
+      "reason": "created_in_future"
+    },
+    {
+      "name": "reject-wrong-authority",
+      "method": "GET",
+      "url": "https://other.example/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:RoGd0jaiRDEuosHhJ/iEO0NDtRiF8lq2K3a+4LKK7dpdXojELg0igGxYdZas6ABX0VYWMdU5x2WjOCadOUiOCg==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "bad_signature"
+    },
+    {
+      "name": "reject-malformed-signature-input",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "garbage",
+        "Signature": "sig1=:RoGd0jaiRDEuosHhJ/iEO0NDtRiF8lq2K3a+4LKK7dpdXojELg0igGxYdZas6ABX0VYWMdU5x2WjOCadOUiOCg==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "malformed_signature_input"
+    },
+    {
+      "name": "reject-untagged",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"other-tag\"",
+        "Signature": "sig1=:4kjcT5b5GmDNOVFAbCbY/qJnmbynRss93srmx0M4d8FV2pvNLxAd0b0DMhpYq12d2Ehgi5Fv9mgE+xrhFbsjDg==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "tag_missing"
+    },
+    {
+      "name": "reject-agent-tamper",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "sig1=\"https://attacker.test\";type=directory",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\";key=\"sig1\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:LyPXBahoSn35pFUxUbS77FYJ3tZUkCyMaSWF8sAMdsBueq5NcYhPphG8qUBSxLP9X2XL4u1MPJrgpndyojs6CA==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "bad_signature"
+    },
+    {
+      "name": "reject-agent-label-mismatch",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "sig2=\"https://signature-agent.test\";type=directory",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\";key=\"sig1\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:LyPXBahoSn35pFUxUbS77FYJ3tZUkCyMaSWF8sAMdsBueq5NcYhPphG8qUBSxLP9X2XL4u1MPJrgpndyojs6CA==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "signature_agent_malformed"
+    },
+    {
+      "name": "reject-agent-header-removed",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:RoGd0jaiRDEuosHhJ/iEO0NDtRiF8lq2K3a+4LKK7dpdXojELg0igGxYdZas6ABX0VYWMdU5x2WjOCadOUiOCg==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "bad_signature"
+    },
+    {
+      "name": "reject-bad-encoding",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:AAAA=:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "bad_signature_encoding"
+    },
+    {
+      "name": "reject-missing-agent-coverage",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:7j10MXODp6vQVWbJrEZfcEVE3fz6AOf9aDD4jOO2vevEylKnXR1fEQzeFkxU4Hl34BU+eoTV7JlYA9ZFDmHsAg==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "signature_agent_not_covered"
+    },
+    {
+      "name": "reject-duplicate-agent-components",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "sig1=\"https://signature-agent.test\";type=directory",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\" \"signature-agent\";key=\"sig1\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:EmCNn6EFZb/GiMdX/LWxi7nRyz/cPxbmQiC540eV9fLJ/NOKl9NxquPuoQrrdEZSCk0xupJtfJENifaTd15nDA==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "signature_agent_not_covered"
+    },
+    {
+      "name": "reject-unknown-agent-param",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\";foo=\"x\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:vBkU5eabwzmM/Ux2lufUdk1w196Kr6smohcwpq3H5ToGhMZQaSFITAErCkVt0y28XVjcDDUDc4inq/VJxXboDQ==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "signature_agent_not_covered"
+    },
+    {
+      "name": "reject-authority-not-covered",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:whSBDmleqsngYwJTcoDsPVn0+36UY+5DgJ990nhLRwvbuiYePnXeDMqaQ9yCr1yM9OxidfQH3JNJHTegWQFoAA==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "authority_not_covered"
+    },
+    {
+      "name": "reject-keyid-not-found",
+      "method": "GET",
+      "url": "https://example.com/path/to/resource",
+      "headers": {
+        "Signature-Agent": "\"https://signature-agent.test\"",
+        "Signature-Input": "sig1=(\"@authority\" \"signature-agent\");created=1735689600;keyid=\"1Tp6uvGIwiqqjMrC1jMcL4l7NDBvUm10TN0VGNLl5Sw\";alg=\"ed25519\";expires=4102444800;tag=\"web-bot-auth\"",
+        "Signature": "sig1=:RoGd0jaiRDEuosHhJ/iEO0NDtRiF8lq2K3a+4LKK7dpdXojELg0igGxYdZas6ABX0VYWMdU5x2WjOCadOUiOCg==:"
+      },
+      "now": 1735689660,
+      "expect": "reject",
+      "reason": "keyid_not_found",
+      "keys": [
+        {
+          "crv": "Ed25519",
+          "kty": "OKP",
+          "x": "v4itbh4Vt-_cXMyf2NVrLHDXc9nBU0jlkDSh6_PJLdI"
+        }
+      ]
+    }
+  ]
+}

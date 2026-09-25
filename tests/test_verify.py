@@ -41,20 +41,127 @@ def test_authority_not_covered_rejected() -> None:
 
 
 def test_signature_agent_must_be_covered() -> None:
-    key, headers = _signed(covered=("@authority",))
+    key, headers = _signed(covered=('"@authority"',))
     result = verify_request(
         "GET", "https://example.com/a", headers, {"keys": [public_jwk(key.public_key())]}
     )
     assert result.reason == "signature_agent_not_covered"
 
 
-def test_signature_agent_must_be_present() -> None:
+def test_structured_agent_url_tamper_rejected() -> None:
+    key = generate_private_key()
+    headers = sign_request(
+        "GET",
+        "https://example.com/a",
+        {},
+        key,
+        "https://agent.example",
+        signature_agent_type="directory",
+    )
+    headers["Signature-Agent"] = 'sig1="https://attacker.example";type=directory'
+    result = verify_request(
+        "GET", "https://example.com/a", headers, {"keys": [public_jwk(key.public_key())]}
+    )
+    assert result.reason == "bad_signature"
+
+
+def test_structured_agent_label_mismatch_rejected() -> None:
+    key = generate_private_key()
+    headers = sign_request(
+        "GET",
+        "https://example.com/a",
+        {},
+        key,
+        "https://agent.example",
+        signature_agent_type="directory",
+    )
+    headers["Signature-Agent"] = 'sig2="https://agent.example";type=directory'
+    result = verify_request(
+        "GET", "https://example.com/a", headers, {"keys": [public_jwk(key.public_key())]}
+    )
+    assert result.reason == "signature_agent_malformed"
+
+
+def test_structured_agent_header_on_legacy_signature_rejected() -> None:
+    key, headers = _signed()
+    headers["Signature-Agent"] = 'sig1="https://agent.example";type=directory'
+    result = verify_request(
+        "GET", "https://example.com/a", headers, {"keys": [public_jwk(key.public_key())]}
+    )
+    assert result.reason == "signature_agent_malformed"
+
+
+_AGENT_PREFIX = 'sig1=("@authority" "signature-agent"{});created=1;keyid="x";alg="ed25519"'
+_AGENT_SUFFIX = ';expires=9999999999;tag="web-bot-auth"'
+
+
+@pytest.mark.parametrize(
+    ("agent_header", "component", "reason"),
+    [
+        (
+            'sig1="https://agent.example"',
+            ';foo="x"',
+            "signature_agent_not_covered",
+        ),
+        (
+            'sig1="https://agent.example"',
+            ' "signature-agent";key="sig1"',
+            "signature_agent_not_covered",
+        ),
+        (
+            'sig1="https://agent.example"',
+            ';key="Sig1"',
+            "signature_agent_not_covered",
+        ),
+        (
+            'Sig1="https://agent.example"',
+            ';key="sig1"',
+            "signature_agent_malformed",
+        ),
+        (
+            'sig1=""',
+            ';key="sig1"',
+            "signature_agent_malformed",
+        ),
+        (
+            'sig1="https://agent.example";type=bogus',
+            ';key="sig1"',
+            "signature_agent_malformed",
+        ),
+        (
+            'sig1="https://a.example",sig1="https://b.example"',
+            ';key="sig1"',
+            "signature_agent_malformed",
+        ),
+    ],
+)
+def test_agent_form_rejections(agent_header: str, component: str, reason: str) -> None:
+    headers = {
+        "Signature-Agent": agent_header,
+        "Signature-Input": f"{_AGENT_PREFIX.format(component)}{_AGENT_SUFFIX}",
+        "Signature": "sig1=:AAAA:",
+    }
+    assert verify_request("GET", "https://example.com/a", headers).reason == reason
+
+
+def test_covered_agent_header_missing_rejected() -> None:
     key, headers = _signed()
     del headers["Signature-Agent"]
     result = verify_request(
         "GET", "https://example.com/a", headers, {"keys": [public_jwk(key.public_key())]}
     )
-    assert result.reason == "signature_agent_missing"
+    assert result.reason == "bad_signature"
+
+
+def test_signature_without_agent_header_or_component_accepted() -> None:
+    """Reference behaviour: agent coverage is only required when the header is present."""
+    key, headers = _signed(covered=('"@authority"',))
+    del headers["Signature-Agent"]
+    result = verify_request(
+        "GET", "https://example.com/a", headers, {"keys": [public_jwk(key.public_key())]}
+    )
+    assert result.ok, result.reason
+    assert result.signature_agent is None
 
 
 def test_tampered_authority_rejected() -> None:

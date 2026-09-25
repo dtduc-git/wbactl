@@ -1,0 +1,38 @@
+name: wbactl conformance
+description: Run Web Bot Auth conformance vectors against a verifier service.
+author: dtduc-git
+branding:
+  icon: check-circle
+  color: blue
+
+inputs:
+  target-url:
+    description: Verifier service URL (receives POST JSON, returns JSON verdict)
+    required: true
+  vectors:
+    description: Optional custom vector file
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Install wbactl
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: pip install "$ACTION_PATH"
+    - name: Conformance
+      shell: bash
+      env:
+        TARGET_URL: ${{ inputs.target-url }}
+        VECTORS: ${{ inputs.vectors }}
+      run: |
+        args=(--target-url "$TARGET_URL")
+        if [ -n "$VECTORS" ]; then
+          args+=(--vectors "$VECTORS")
+        fi
+        wbactl conformance "${args[@]}"
