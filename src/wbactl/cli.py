@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__, spec
+from .audit import load_domains, run_audit, summarize
 from .check import run_check
 from .conformance import run_conformance
 from .keys import (
@@ -27,6 +28,7 @@ app = typer.Typer(
     help="Static/CI toolkit for Web Bot Auth (draft-00).",
 )
 console = Console()
+err_console = Console(stderr=True)
 
 
 def _version_callback(value: bool) -> None:
@@ -195,6 +197,80 @@ def conformance(
         console.print(table)
     if passed != len(outcomes):
         raise typer.Exit(1)
+
+
+@app.command()
+def audit(
+    domains_file: Path = typer.Option(..., "--domains", help="File with one domain per line."),
+    out: Path | None = typer.Option(
+        None,
+        "--out",
+        help="Write raw per-domain JSONL here (keep private; publish aggregates only).",
+    ),
+    delay: float = typer.Option(1.0, "--delay", min=0.0, help="Seconds between domains."),
+    limit: int | None = typer.Option(
+        None, "--limit", min=1, help="Maximum number of domains to probe."
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Machine-readable summary."),
+) -> None:
+    """Passively audit public AI-access signals (robots.txt, headers, WBA directory)."""
+    try:
+        domains = load_domains(domains_file)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    try:
+        stream = out.open("w") if out is not None else None
+    except OSError as exc:
+        console.print(f"[red]error:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    try:
+        def write_report(report: object) -> None:
+            if stream is not None:
+                stream.write(json.dumps(asdict(report)) + "\n")
+                stream.flush()
+
+        reports = run_audit(
+            domains,
+            delay=delay,
+            limit=limit,
+            on_report=write_report if stream is not None else None,
+        )
+    finally:
+        if stream is not None:
+            stream.close()
+    if out is not None:
+        err_console.print(f"raw reports written to {out}")
+    summary = summarize(reports)
+    if as_json:
+        console.print_json(json.dumps(summary))
+    else:
+        table = Table(title=f"wbactl audit ({summary['domains']} domains)")
+        table.add_column("signal")
+        table.add_column("count")
+        table.add_column("percent")
+        table.add_row(
+            "Content-Usage (AIPREF)",
+            str(summary["content_usage"]),
+            f"{summary['content_usage_pct']}%",
+        )
+        table.add_row(
+            "Content-Signal", str(summary["content_signal"]), f"{summary['content_signal_pct']}%"
+        )
+        table.add_row(
+            "AI user-agent disallowed",
+            str(summary["ai_disallow"]),
+            f"{summary['ai_disallow_pct']}%",
+        )
+        table.add_row(
+            "WBA key directory",
+            str(summary["wba_directory"]),
+            f"{summary['wba_directory_pct']}%",
+        )
+        table.add_row("errors", str(summary["errors"]), "-")
+        console.print(table)
 
 
 def main() -> None:

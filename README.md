@@ -10,11 +10,12 @@ Three jobs, all local-first, no server, no telemetry:
 - **`conformance`** — verifier test vectors: run the bundled accept/reject
   vectors against a verifier implementation (bundled reference verifier, an
   HTTP service, or a command).
-- **`audit`** — passive adoption audit of public AI-access signals
-  (robots.txt AI rules, `Content-Usage`, key directories). *(P1)*
+- **`audit`** — passive adoption audit of public AI-access signals: robots.txt
+  AI rules, AIPREF `Content-Usage`, `Content-Signal`, and WBA key directories.
+  Raw per-domain reports stay private; publish aggregates only.
 
 Status: early work in progress. P0 is `keygen` + `directory` + `check` +
-`conformance`.
+`conformance` + `audit`.
 
 ## Install (dev)
 
@@ -42,7 +43,18 @@ uv run wbactl check \
 uv run wbactl conformance                     # bundled reference verifier
 uv run wbactl conformance --target-url http://localhost:8080/verify
 uv run wbactl conformance --target-cmd "my-verifier --stdin"
+
+# 5. Passively audit public AI-access signals
+uv run wbactl audit --domains domains.txt --out audit-raw.jsonl --delay 1
 ```
+
+### Audit ethics
+
+`audit` fetches only public metadata (robots.txt, response headers, the
+well-known key directory) with a fixed delay and an honest User-Agent. It never
+probes like an agent, never executes anything, and does not follow more than
+three redirects. Raw per-domain reports are for private use — publish
+aggregates only.
 
 ### Conformance target contract
 
