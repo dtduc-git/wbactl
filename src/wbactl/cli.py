@@ -211,6 +211,9 @@ def audit(
     limit: int | None = typer.Option(
         None, "--limit", min=1, help="Maximum number of domains to probe."
     ),
+    timeout: float = typer.Option(
+        15.0, "--timeout", min=1.0, help="Socket timeout per connect/read, in seconds."
+    ),
     as_json: bool = typer.Option(False, "--json", help="Machine-readable summary."),
 ) -> None:
     """Passively audit public AI-access signals (robots.txt, headers, WBA directory)."""
@@ -236,6 +239,7 @@ def audit(
             domains,
             delay=delay,
             limit=limit,
+            timeout=timeout,
             on_report=write_report if stream is not None else None,
         )
     finally:

@@ -175,6 +175,23 @@ def test_cli_audit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert probed == ["example.com", "second.example"]
 
 
+def test_cli_audit_timeout_passed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict = {}
+
+    def fake_run(domains: list[str], **kwargs: object) -> list[DomainReport]:
+        captured.update(kwargs)
+        return [DomainReport(domains[0], robots_status=200)]
+
+    monkeypatch.setattr("wbactl.cli.run_audit", fake_run)
+    domains = tmp_path / "domains.txt"
+    domains.write_text("example.com\n")
+    result = runner.invoke(
+        app, ["audit", "--domains", str(domains), "--timeout", "7", "--delay", "0"]
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["timeout"] == 7.0
+
+
 def test_cli_audit_json_and_limit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     probed: list[str] = []
 
