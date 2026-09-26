@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from wbactl.keys import (
+    b64_decode,
     b64url_decode,
     generate_private_key,
     jwk_thumbprint,
@@ -60,3 +61,11 @@ def test_save_private_key_is_owner_only_and_exclusive(tmp_path: Path) -> None:
     with pytest.raises(FileExistsError):
         save_private_key(generate_private_key(), path)
     save_private_key(generate_private_key(), path, force=True)
+
+
+def test_b64_decode_strictness() -> None:
+    assert b64_decode("AAAA") == b"\x00\x00\x00"
+    assert b64_decode("AAA=") == b"\x00\x00"
+    for text in ("AAAA=", "A===", "AB=C", "AAA", "AAAAA"):
+        with pytest.raises(ValueError):
+            b64_decode(text)

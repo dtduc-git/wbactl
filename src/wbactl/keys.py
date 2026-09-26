@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
@@ -29,8 +30,18 @@ def b64(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
+_B64_STRICT = re.compile(r"[A-Za-z0-9+/]*={0,2}")
+
+
 def b64_decode(text: str) -> bytes:
-    """Decode standard base64 strictly (padding required)."""
+    """Decode standard base64 strictly.
+
+    Validates length, alphabet and padding ourselves: CPython's decoder
+    tolerates excess padding on some platforms, which would make verification
+    behaviour platform-dependent.
+    """
+    if len(text) % 4 != 0 or not _B64_STRICT.fullmatch(text):
+        raise ValueError("invalid base64")
     return base64.b64decode(text, validate=True)
 
 
