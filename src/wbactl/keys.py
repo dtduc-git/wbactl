@@ -36,9 +36,10 @@ _B64_STRICT = re.compile(r"[A-Za-z0-9+/]*={0,2}")
 def b64_decode(text: str) -> bytes:
     """Decode standard base64 strictly.
 
-    Validates length, alphabet and padding ourselves: CPython's decoder
-    tolerates excess padding on some platforms, which would make verification
-    behaviour platform-dependent.
+    Older CPython releases accept excess padding with ``validate=True`` while
+    newer ones reject it, so length, alphabet and padding are validated here to
+    keep verification version-independent (the length check is what catches
+    excess padding).
     """
     if len(text) % 4 != 0 or not _B64_STRICT.fullmatch(text):
         raise ValueError("invalid base64")

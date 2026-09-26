@@ -66,6 +66,22 @@ def test_save_private_key_is_owner_only_and_exclusive(tmp_path: Path) -> None:
 def test_b64_decode_strictness() -> None:
     assert b64_decode("AAAA") == b"\x00\x00\x00"
     assert b64_decode("AAA=") == b"\x00\x00"
-    for text in ("AAAA=", "A===", "AB=C", "AAA", "AAAAA"):
-        with pytest.raises(ValueError):
+    assert b64_decode("AA==") == b"\x00"
+    malformed = (
+        "AAAA=",
+        "A===",
+        "====",
+        "AB=C",
+        "A=A=",
+        "AAA",
+        "AAAAA",
+        "AAA\n",
+        "AA A",
+        "AA-_",
+        "AAAé",
+    )
+    for text in malformed:
+        # Match our own message: stdlib may also raise ValueError, so a bare
+        # raises() would pass even if our validation were removed.
+        with pytest.raises(ValueError, match="invalid base64"):
             b64_decode(text)
