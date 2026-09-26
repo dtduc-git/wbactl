@@ -15,14 +15,14 @@ Four jobs, all local-first, no server, no telemetry:
 - **`keygen` / `directory`** — generate an Ed25519 signing key and the JWKS
   directory document to host at the well-known path.
 
-Status: early work in progress (pre-1.0, PyPI release pending).
+Status: early work in progress (pre-1.0).
 
 Dataset: [State of Agent Access — 2026-09](research/2026-09-agent-access.md).
 
 ## Install
 
 ```sh
-pip install "git+https://github.com/dtduc-git/wbactl"   # PyPI pending
+pip install wbactl
 ```
 
 Development:
