@@ -3,8 +3,8 @@
 Per domain, this fetches only public metadata: robots.txt (AI user-agent rules,
 ``Content-Usage`` directive, ``Content-Signal``), the homepage response headers,
 and the well-known Web Bot Auth key directory. No agent-like probing, no
-credentials, no execution. Raw per-domain reports are for private use; publish
-aggregates only.
+credentials, no execution. Never publish the raw JSONL: publish aggregates and
+hand-validated examples of public metadata only.
 """
 
 from __future__ import annotations
@@ -34,13 +34,9 @@ AI_USER_AGENT_TOKENS = (
     "amazonbot",
     "applebot-extended",
     "meta-externalagent",
-    "facebookbot",
     "perplexitybot",
     "youbot",
     "cohere-ai",
-    "diffbot",
-    "omgili",
-    "petalbot",
     "imagesiftbot",
 )
 

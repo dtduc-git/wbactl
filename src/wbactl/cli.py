@@ -205,7 +205,7 @@ def audit(
     out: Path | None = typer.Option(
         None,
         "--out",
-        help="Write raw per-domain JSONL here (keep private; publish aggregates only).",
+        help="Write raw per-domain JSONL here (never commit or publish this file).",
     ),
     delay: float = typer.Option(1.0, "--delay", min=0.0, help="Seconds between domains."),
     limit: int | None = typer.Option(

@@ -1,0 +1,14 @@
+{
+  "domains": 500,
+  "reachable": 359,
+  "content_usage": 1,
+  "content_usage_pct": 0.3,
+  "content_signal": 11,
+  "content_signal_pct": 3.1,
+  "ai_disallow": 64,
+  "ai_disallow_pct": 17.8,
+  "wba_directory": 4,
+  "wba_directory_pct": 1.1,
+  "errors": 147,
+  "note": "ai_disallow re-parsed from a re-fetch with the refined token list (see report)"
+}
